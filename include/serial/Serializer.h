@@ -7,6 +7,8 @@
 #include <type_traits>
 #include <cstdint>
 
+#include <tepp/tepp.h>
+
 #define SAFETY_CHECKS
 
 #ifdef SAFETY_CHECKS
@@ -17,15 +19,8 @@
 #define WRITE(X) serialiser.write(X)
 #endif
 
-#ifdef SAFETY_CHECKS
-#define RETURN return serializer.stream.good()
-#else
-#define RETURN return true
-#endif
-
-template<class T, class = void>
+template<class T>
 struct Serializable;
-
 
 struct Write;
 struct Read;
@@ -60,51 +55,33 @@ struct Serializer
 	Serializer(std::istream& readStream_);
 };
 
-template<>
-struct Serializable<size_t>
+template<class T>
+requires te::contains_v<te::list<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t>, T>
+struct Serializable<T>
 {
-	static bool read(Serializer& serializer, size_t& val) {
+	static bool read(Serializer& serializer, T& val) {
 		return serializer.readBytes(reinterpret_cast<char*>(&val), sizeof(val));
 	};
 
-	static bool write(Serializer& serializer, size_t const& val) {
+	static bool write(Serializer& serializer, T const& val) {
 		return serializer.writeBytes(reinterpret_cast<char const*>(&val), sizeof(val));
 	}
 };
 
-template<>
-struct Serializable<int64_t>
+template<class T>
+requires (std::is_same_v<size_t, T> && !std::is_same_v<size_t, uint64_t>)
+struct Serializable<T>
 {
-	static bool read(Serializer& serializer, int64_t& val) {
-		return serializer.readBytes(reinterpret_cast<char*>(&val), sizeof(val));
+	static bool read(Serializer& serializer, T& val) {
+		uint64_t v;
+		READ(v);
+		val = static_cast<size_t>(v);
+		return true;
 	};
 
-	static bool write(Serializer& serializer, int64_t const& val) {
-		return serializer.writeBytes(reinterpret_cast<char const*>(&val), sizeof(val));
-	}
-};
-
-template<>
-struct Serializable<int32_t>
-{
-	static bool read(Serializer& serializer, int32_t& val) {
-		return serializer.readBytes(reinterpret_cast<char*>(&val), sizeof(val));
-	};
-
-	static bool write(Serializer& serializer, int32_t const& val) {
-		return serializer.writeBytes(reinterpret_cast<char const*>(&val), sizeof(val));
-	}
-};
-
-template<>
-struct Serializable<int8_t>
-{
-	static bool read(Serializer& serializer, int8_t& val) {
-		return serializer.readBytes(reinterpret_cast<char*>(&val), sizeof(val));
-	};
-
-	static bool write(Serializer& serializer, int8_t const& val) {
-		return serializer.writeBytes(reinterpret_cast<char const*>(&val), sizeof(val));
+	static bool write(Serializer& serializer, T const& val) {
+		uint64_t v = static_cast<uint64_t>(val);
+		return serializer.write(v);
 	}
 };
 
@@ -145,8 +122,12 @@ struct Serializable<glm::ivec2>
 
 template<class... Args>
 inline bool Serializer::writeAll(Args&... args) {
+#ifdef SAFETY_CHECKS
+	return (this->write(args) && ...);
+#else
 	(this->write(args), ...);
 	return true;
+#endif // SAFETY_CHECKS
 }
 
 template<class Selector, class ...Args>
@@ -161,18 +142,6 @@ inline bool Serializer::runAll(Args& ...args) {
 		static_assert(0);
 	}
 }
-
-//
-//template<class T>
-//inline bool Reader::read(std::vector<T>& vec) {
-//	size_t size;
-//	READ(size);
-//	vec.resize(size);
-//	for (size_t i = 0; i < size; i++) {
-//		READ(vec[i]);
-//	}
-//	return true;
-//}
 
 template<class... Args>
 inline bool Serializer::readAll(Args& ...args) {
