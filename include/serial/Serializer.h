@@ -6,6 +6,9 @@
 #include <istream>
 #include <type_traits>
 #include <cstdint>
+#include <string>
+#include <array>
+#include <bitset>
 
 #include <tepp/tepp.h>
 
@@ -13,10 +16,14 @@
 
 #ifdef SAFETY_CHECKS
 #define READ(X) if (!serializer.read(X)) return false
+#define READBYTES(X, S) if (!serializer.readBytes(X, S)) return false
 #define WRITE(X) if (!serializer.write(X)) return false
+#define WRITEBYTES(X, S) if (!serializer.writeBytes(X, S)) return false
 #else
 #define READ(X) serializer.read(X)
+#define READBYTES(X, S) serializer.readBytes(X, S)
 #define WRITE(X) serialiser.write(X)
+#define WRITEBYTES(X, S) serializer.writeBytes(X, S)
 #endif
 
 template<class T>
@@ -55,8 +62,26 @@ struct Serializer
 	Serializer(std::istream& readStream_);
 };
 
+template<>
+struct Serializable<std::string>
+{
+	static bool read(Serializer& serializer, std::string& val) {
+		size_t size;
+		READ(size);
+		val.resize(size);
+		return serializer.readBytes(&val[0], size);
+	};
+
+	static bool write(Serializer& serializer, std::string const& val) {
+		WRITE(val.size());
+		return serializer.writeBytes(val.c_str(), val.size());
+	}
+};
+
+using simple_types = te::list<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t, std::byte>;
+
 template<class T>
-requires te::contains_v<te::list<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t>, T>
+requires te::contains_v<simple_types, T>
 struct Serializable<T>
 {
 	static bool read(Serializer& serializer, T& val) {
@@ -97,6 +122,30 @@ struct Serializable<bool>
 
 	static bool write(Serializer& serializer, bool const& val) {
 		return serializer.write(static_cast<int8_t>(val));
+	}
+};
+
+template<>
+struct Serializable<glm::vec2>
+{
+	static bool read(Serializer& serializer, glm::vec2& val) {
+		std::string s;
+		READ(s);
+		char* end;
+		val.x = std::strtof(s.c_str(), &end);
+		assert(end != s.c_str());
+		if (end == s.c_str()) return false;
+
+		val.y = std::strtof(s.c_str(), &end);
+		assert(end != s.c_str());
+		if (end == s.c_str()) return false;
+		return true;
+	}
+
+	static bool write(Serializer& serializer, glm::vec2 const& val) {
+		return
+			serializer.write(std::to_string(val.x)) &&
+			serializer.write(std::to_string(val.y));
 	}
 };
 
@@ -153,6 +202,109 @@ inline bool Serializer::readAll(Args& ...args) {
 #endif // SAFETY_CHECKS
 }
 
+template<class T, size_t Size>
+struct Serializable<std::array<T, Size>>
+{
+	static bool read(Serializer& serializer, std::array<T, Size>& vec) {
+		size_t size;
+		READ(size);
+
+		assert(size == Size);
+		if (size != Size) return false;
+
+		for (size_t i = 0; i < size; i++) {
+			READ(vec[i]);
+		}
+		return true;
+	};
+
+	static bool write(Serializer& serializer, std::array<T, Size> const& vec) {
+		WRITE(Size);
+		for (auto const& v : vec) {
+			WRITE(v);
+		}
+		return true;
+	}
+};
+
+template<size_t N>
+struct Serializable<std::bitset<N>>
+{
+	static inline auto constexpr width = sizeof(unsigned long long);
+
+	static bool read(Serializer& serializer, std::bitset<N>& b) {
+		std::vector<uint64_t> parts;
+		for (size_t n = 0; n < N; n += width) {
+			uint64_t v;
+			READ(v);
+			parts.push_back(v);
+		}
+		std::bitset<N> bits;
+
+		while (!parts.empty()) {
+			auto v = parts.back();
+			parts.pop_back();
+
+			bits = static_cast<unsigned long long>(v);
+
+			b <<= width * 8;
+			b |= bits;
+		}
+
+		return true;
+	};
+
+	static bool write(Serializer& serializer, std::bitset<N> const& b_) {
+		auto b = b_;
+		std::bitset<N> ones = 0xFFFF'FFFF'FFFF'FFFFull;
+		for (size_t n = 0; n < N; n += width) {
+			unsigned long long p = (b & ones).to_ullong();
+			b >>= width * 8;
+			serializer.write(static_cast<uint64_t>(p));
+		}
+		return true;
+	};
+};
+
+template<class T, size_t Size>
+requires te::contains_v<simple_types, T>
+struct Serializable<std::array<T, Size>>
+{
+	static bool read(Serializer& serializer, std::array<T, Size>& vec) {
+		size_t size;
+		READ(size);
+		assert(Size == size);
+		if (Size != size) return false;
+		READBYTES(reinterpret_cast<char*>(vec.data()), vec.size() * sizeof(T));
+		return true;
+	};
+
+	static bool write(Serializer& serializer, std::array<T, Size> const& vec) {
+		WRITE(vec.size());
+		WRITEBYTES(reinterpret_cast<char const*>(vec.data()), vec.size() * sizeof(T));
+		return true;
+	};
+};
+
+template<class T>
+requires te::contains_v<simple_types, T>
+struct Serializable<std::vector<T>>
+{
+	static bool read(Serializer& serializer, std::vector<T>& vec) {
+		size_t size;
+		READ(size);
+		vec.resize(size);
+		READBYTES(reinterpret_cast<char*>(vec.data()), vec.size() * sizeof(T));
+		return true;
+	};
+
+	static bool write(Serializer& serializer, std::vector<T> const& vec) {
+		WRITE(vec.size());
+		WRITEBYTES(reinterpret_cast<char const*>(vec.data()), vec.size() * sizeof(T));
+		return true;
+	};
+};
+
 template<class T>
 struct Serializable<std::vector<T>>
 {
@@ -173,6 +325,20 @@ struct Serializable<std::vector<T>>
 		}
 		return true;
 	}
+};
+
+template<class T>
+struct Serializable<std::unique_ptr<T>>
+{
+	static bool read(Serializer& serializer, std::unique_ptr<T>& ptr) {
+		ptr = std::make_unique<T>();
+		return serializer.read(*ptr);
+	};
+
+	static bool write(Serializer& serializer, std::unique_ptr<T> const& ptr) {
+		assert(ptr.get() != nullptr);
+		return serializer.write(*ptr);
+	};
 };
 
 template<class T>
