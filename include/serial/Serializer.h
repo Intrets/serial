@@ -57,9 +57,10 @@ struct Serializer
 	template<class Selector, class... Args>
 	bool runAll(Args&... args);
 
-
 	Serializer(std::ostream& writeStream_);
 	Serializer(std::istream& readStream_);
+	Serializer() = default;
+	~Serializer() = default;
 };
 
 template<>
@@ -126,26 +127,31 @@ struct Serializable<bool>
 };
 
 template<>
-struct Serializable<glm::vec2>
+struct Serializable<float>
 {
-	static bool read(Serializer& serializer, glm::vec2& val) {
+	static bool read(Serializer& serializer, float& val) {
 		std::string s;
 		READ(s);
 		char* end;
-		val.x = std::strtof(s.c_str(), &end);
+		val = std::strtof(s.c_str(), &end);
 		assert(end != s.c_str());
-		if (end == s.c_str()) return false;
+		return (end != s.c_str());
+	}
 
-		val.y = std::strtof(s.c_str(), &end);
-		assert(end != s.c_str());
-		if (end == s.c_str()) return false;
-		return true;
+	static bool write(Serializer& serializer, float const& val) {
+		return serializer.write(std::to_string(val));
+	}
+};
+
+template<>
+struct Serializable<glm::vec2>
+{
+	static bool read(Serializer& serializer, glm::vec2& val) {
+		return serializer.readAll<float&, float&>(val.x, val.y);
 	}
 
 	static bool write(Serializer& serializer, glm::vec2 const& val) {
-		return
-			serializer.write(std::to_string(val.x)) &&
-			serializer.write(std::to_string(val.y));
+		return serializer.writeAll<float const&, float const&>(val.x, val.y);
 	}
 };
 
