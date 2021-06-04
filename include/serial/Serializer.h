@@ -12,19 +12,10 @@
 
 #include <tepp/tepp.h>
 
-#define SAFETY_CHECKS
-
-#ifdef SAFETY_CHECKS
 #define READ(X) if (!serializer.read(X)) return false
 #define READBYTES(X, S) if (!serializer.readBytes(X, S)) return false
 #define WRITE(X) if (!serializer.write(X)) return false
 #define WRITEBYTES(X, S) if (!serializer.writeBytes(X, S)) return false
-#else
-#define READ(X) serializer.read(X)
-#define READBYTES(X, S) serializer.readBytes(X, S)
-#define WRITE(X) serialiser.write(X)
-#define WRITEBYTES(X, S) serializer.writeBytes(X, S)
-#endif
 
 template<class T>
 struct Serializable;
