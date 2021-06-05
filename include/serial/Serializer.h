@@ -9,6 +9,7 @@
 #include <string>
 #include <array>
 #include <bitset>
+#include <optional>
 
 #include <tepp/tepp.h>
 
@@ -67,6 +68,34 @@ struct Serializable<std::string>
 	static bool write(Serializer& serializer, std::string const& val) {
 		WRITE(val.size());
 		return serializer.writeBytes(val.c_str(), val.size());
+	}
+};
+
+template<class T>
+struct Serializable<std::optional<T>>
+{
+	static bool read(Serializer& serializer, std::optional<T>& val) {
+		bool hasValue;
+		READ(hasValue);
+		if (hasValue) {
+			val = T();
+			return serializer.read(val.value());
+		}
+		else {
+			val = std::nullopt;
+			return true;
+		}
+	};
+
+	static bool write(Serializer& serializer, std::optional<T> const& val) {
+		if (val.has_value()) {
+			WRITE(true);
+			return serializer.write(val.value());
+		}
+		else {
+			WRITE(false);
+			return true;
+		}
 	}
 };
 
