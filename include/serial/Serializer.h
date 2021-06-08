@@ -31,11 +31,18 @@ struct Wrapped
 {
 	using value_type = std::remove_cvref_t<T>;
 	T& val;
-	std::string name;
+	std::string_view name;
 };
 
+
 template<class T>
-concept is_wrapped = requires (T t) { t.val; };
+struct is_wrapped_ : std::false_type {};
+
+template<class T>
+struct is_wrapped_<Wrapped<T>> : std::true_type {};
+
+template<class T>
+concept is_wrapped = is_wrapped_<T>::value;
 
 struct Serializer
 {
