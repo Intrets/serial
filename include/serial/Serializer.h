@@ -20,6 +20,9 @@
 #define WRITE(X) if (!serializer.write(X)) return false
 #define WRITEBYTES(X, S) if (!serializer.writeBytes(X, S)) return false
 
+#define PRINT_DEF(X) static bool run(Print, Serializer& serializer, X&& obj)
+#define ALL(X) Wrapped{ obj.X, #X }
+
 template<class T>
 struct Serializable;
 
