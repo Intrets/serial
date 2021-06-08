@@ -11,6 +11,7 @@
 #include <bitset>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 #include <tepp/tepp.h>
 
@@ -28,6 +29,7 @@ struct Read;
 template<class T>
 struct Wrapped
 {
+	using value_type = std::remove_cvref_t<T>;
 	T& val;
 	std::string_view name;
 };
@@ -52,13 +54,13 @@ struct Serializer
 
 
 	template<class... Args>
-	bool readAll(Args&... args);
+	bool readAll(Args&&... args);
 
 	template<class... Args>
-	bool writeAll(Args&... args);
+	bool writeAll(Args&&... args);
 
 	template<class Selector, class... Args>
-	bool runAll(Args&... args);
+	bool runAll(Args&&... args);
 
 	Serializer(std::ostream& writeStream_);
 	Serializer(std::istream& readStream_);
@@ -207,7 +209,7 @@ struct Serializable<glm::ivec2>
 };
 
 template<class... Args>
-inline bool Serializer::writeAll(Args&... args) {
+inline bool Serializer::writeAll(Args&&... args) {
 #ifdef SAFETY_CHECKS
 	return (this->write(args) && ...);
 #else
@@ -217,12 +219,12 @@ inline bool Serializer::writeAll(Args&... args) {
 }
 
 template<class Selector, class ...Args>
-inline bool Serializer::runAll(Args& ...args) {
+inline bool Serializer::runAll(Args&& ...args) {
 	if constexpr (std::is_same_v<Selector, Read>) {
-		return this->readAll(args...);
+		return this->readAll(std::forward<Args>(args)...);
 	}
 	else if constexpr (std::is_same_v<Selector, Write>) {
-		return this->writeAll(args...);
+		return this->writeAll(std::forward<Args>(args)...);
 	}
 	else {
 		static_assert(0);
@@ -230,7 +232,7 @@ inline bool Serializer::runAll(Args& ...args) {
 }
 
 template<class... Args>
-inline bool Serializer::readAll(Args& ...args) {
+inline bool Serializer::readAll(Args&& ...args) {
 #ifdef SAFETY_CHECKS
 	return (this->read(args) && ...);
 #else
@@ -383,20 +385,38 @@ concept has_run = requires (T t, Serializer s) { Serializable<T>::template run<R
 
 template<class T>
 inline bool Serializer::write(T const& val) {
-	if constexpr (has_run<T>) {
-		return Serializable<T>::template run<Write, T const&>(*this, val);
+	if constexpr (is_wrapped<T>) {
+		//if constexpr (has_run<typename T::value_type>) {
+		//	return Serializable<typename T::value_type>::template run<Write, typename T::value_type const&>(*this, val.val);
+		//}
+		//else {
+		//	return Serializable<typename T::value_type>::write(*this, val.val);
+		//}
+		this->write(val.val);
+		return true;
 	}
 	else {
-		return Serializable<T>::write(*this, val);
+		if constexpr (has_run<T>) {
+			return Serializable<T>::template run<Write, T const&>(*this, val);
+		}
+		else {
+			return Serializable<T>::write(*this, val);
+		}
 	}
 }
 
 template<class T>
 inline bool Serializer::read(T& val) {
-	if constexpr (has_run<T>) {
-		return Serializable<T>::template run<Read, T&>(*this, val);
+	if constexpr (is_wrapped<T>) {
+		this->read(val.val);
+		return true;
 	}
 	else {
-		return Serializable<T>::read(*this, val);
+		if constexpr (has_run<T>) {
+			return Serializable<T>::template run<Read, T&>(*this, val);
+		}
+		else {
+			return Serializable<T>::read(*this, val);
+		}
 	}
 }
