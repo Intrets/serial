@@ -31,7 +31,7 @@ struct Wrapped
 {
 	using value_type = std::remove_cvref_t<T>;
 	T& val;
-	std::string_view name;
+	std::string name;
 };
 
 template<class T>
