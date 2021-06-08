@@ -10,6 +10,7 @@
 #include <array>
 #include <bitset>
 #include <optional>
+#include <string_view>
 
 #include <tepp/tepp.h>
 
@@ -23,6 +24,16 @@ struct Serializable;
 
 struct Write;
 struct Read;
+
+template<class T>
+struct Wrapped
+{
+	T& val;
+	std::string_view name;
+};
+
+template<class T>
+concept is_wrapped = requires (T t) { t.val; };
 
 struct Serializer
 {
