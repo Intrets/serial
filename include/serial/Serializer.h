@@ -23,8 +23,9 @@
 template<class T>
 struct Serializable;
 
-struct Write;
-struct Read;
+struct Write {};
+struct Read {};
+struct Print {};
 
 template<class T>
 struct Wrapped
@@ -54,10 +55,10 @@ struct Serializer
 
 
 	template<class T>
-	bool write(T const& val);
+	bool write(T&& val);
 
 	template<class T>
-	bool read(T& val);
+	bool read(T&& val);
 
 
 	template<class... Args>
@@ -75,26 +76,32 @@ struct Serializer
 	~Serializer() = default;
 };
 
+
 template<>
 struct Serializable<std::string>
 {
-	static bool read(Serializer& serializer, std::string& val) {
+	static bool run(Read, Serializer& serializer, std::string&& val) {
 		size_t size;
 		READ(size);
 		val.resize(size);
 		return serializer.readBytes(&val[0], size);
 	};
 
-	static bool write(Serializer& serializer, std::string const& val) {
+	static bool run(Write, Serializer& serializer, std::string&& val) {
 		WRITE(val.size());
 		return serializer.writeBytes(val.c_str(), val.size());
 	}
+
+	static bool run(Print, Serializer& serializer, std::string&& val) {
+		return true;
+	}
 };
+
 
 template<class T>
 struct Serializable<std::optional<T>>
 {
-	static bool read(Serializer& serializer, std::optional<T>& val) {
+	static bool run(Read, Serializer& serializer, std::optional<T>&& val) {
 		bool hasValue;
 		READ(hasValue);
 		if (hasValue) {
@@ -107,7 +114,7 @@ struct Serializable<std::optional<T>>
 		}
 	};
 
-	static bool write(Serializer& serializer, std::optional<T> const& val) {
+	static bool run(Write, Serializer& serializer, std::optional<T>&& val) {
 		if (val.has_value()) {
 			WRITE(true);
 			return serializer.write(val.value());
@@ -125,11 +132,11 @@ template<class T>
 requires te::contains_v<simple_types, T>
 struct Serializable<T>
 {
-	static bool read(Serializer& serializer, T& val) {
+	static bool run(Read, Serializer& serializer, T&& val) {
 		return serializer.readBytes(reinterpret_cast<char*>(&val), sizeof(val));
 	};
 
-	static bool write(Serializer& serializer, T const& val) {
+	static bool run(Write, Serializer& serializer, T&& val) {
 		return serializer.writeBytes(reinterpret_cast<char const*>(&val), sizeof(val));
 	}
 };
@@ -138,14 +145,14 @@ template<class T>
 requires (std::is_same_v<size_t, T> && !std::is_same_v<size_t, uint64_t>)
 struct Serializable<T>
 {
-	static bool read(Serializer& serializer, T& val) {
+	static bool run(Read, Serializer& serializer, T&& val) {
 		uint64_t v;
 		READ(v);
 		val = static_cast<size_t>(v);
 		return true;
 	};
 
-	static bool write(Serializer& serializer, T const& val) {
+	static bool run(Write, Serializer& serializer, T&& val) {
 		uint64_t v = static_cast<uint64_t>(val);
 		return serializer.write(v);
 	}
@@ -154,14 +161,14 @@ struct Serializable<T>
 template<>
 struct Serializable<bool>
 {
-	static bool read(Serializer& serializer, bool& val) {
+	static bool run(Read, Serializer& serializer, bool&& val) {
 		int8_t v;
 		READ(v);
 		val = static_cast<bool>(v);
 		return true;
 	};
 
-	static bool write(Serializer& serializer, bool const& val) {
+	static bool run(Write, Serializer& serializer, bool&& val) {
 		return serializer.write(static_cast<int8_t>(val));
 	}
 };
@@ -169,7 +176,7 @@ struct Serializable<bool>
 template<>
 struct Serializable<float>
 {
-	static bool read(Serializer& serializer, float& val) {
+	static bool run(Read, Serializer& serializer, float&& val) {
 		std::string s;
 		READ(s);
 		char* end;
@@ -178,7 +185,7 @@ struct Serializable<float>
 		return (end != s.c_str());
 	}
 
-	static bool write(Serializer& serializer, float const& val) {
+	static bool run(Write, Serializer& serializer, float&& val) {
 		return serializer.write(std::to_string(val));
 	}
 };
@@ -186,19 +193,16 @@ struct Serializable<float>
 template<>
 struct Serializable<glm::vec2>
 {
-	static bool read(Serializer& serializer, glm::vec2& val) {
-		return serializer.readAll<float&, float&>(val.x, val.y);
-	}
-
-	static bool write(Serializer& serializer, glm::vec2 const& val) {
-		return serializer.writeAll<float const&, float const&>(val.x, val.y);
-	}
+	template<class Selector>
+	static bool run(Selector, Serializer& serializer, glm::vec2&& val) {
+		return serializer.runAll<Selector>(val.x, val.y);
+	};
 };
 
 template<>
 struct Serializable<glm::ivec2>
 {
-	static bool read(Serializer& serializer, glm::ivec2& val) {
+	static bool run(Read, Serializer& serializer, glm::ivec2&& val) {
 		int32_t x;
 		READ(x);
 		val.x = x;
@@ -208,7 +212,7 @@ struct Serializable<glm::ivec2>
 		return true;
 	}
 
-	static bool write(Serializer& serializer, glm::ivec2 const& val) {
+	static bool run(Write, Serializer& serializer, glm::ivec2&& val) {
 		return
 			serializer.write(static_cast<int32_t>(val.x)) &&
 			serializer.write(static_cast<int32_t>(val.y));
@@ -217,21 +221,19 @@ struct Serializable<glm::ivec2>
 
 template<class... Args>
 inline bool Serializer::writeAll(Args&&... args) {
-#ifdef SAFETY_CHECKS
 	return (this->write(args) && ...);
-#else
-	(this->write(args), ...);
-	return true;
-#endif // SAFETY_CHECKS
 }
 
-template<class Selector, class ...Args>
+template<class Selector, class... Args>
 inline bool Serializer::runAll(Args&& ...args) {
 	if constexpr (std::is_same_v<Selector, Read>) {
 		return this->readAll(std::forward<Args>(args)...);
 	}
 	else if constexpr (std::is_same_v<Selector, Write>) {
 		return this->writeAll(std::forward<Args>(args)...);
+	}
+	else if constexpr (std::is_same_v<Selector, Print>) {
+		return true;
 	}
 	else {
 		static_assert(0);
@@ -240,18 +242,13 @@ inline bool Serializer::runAll(Args&& ...args) {
 
 template<class... Args>
 inline bool Serializer::readAll(Args&& ...args) {
-#ifdef SAFETY_CHECKS
 	return (this->read(args) && ...);
-#else
-	(this->read(args), ...);
-	return true;
-#endif // SAFETY_CHECKS
 }
 
 template<class T, size_t Size>
 struct Serializable<std::array<T, Size>>
 {
-	static bool read(Serializer& serializer, std::array<T, Size>& vec) {
+	static bool run(Read, Serializer& serializer, std::array<T, Size>&& vec) {
 		size_t size;
 		READ(size);
 
@@ -264,9 +261,9 @@ struct Serializable<std::array<T, Size>>
 		return true;
 	};
 
-	static bool write(Serializer& serializer, std::array<T, Size> const& vec) {
+	static bool run(Write, Serializer& serializer, std::array<T, Size>&& vec) {
 		WRITE(Size);
-		for (auto const& v : vec) {
+		for (auto& v : vec) {
 			WRITE(v);
 		}
 		return true;
@@ -278,7 +275,7 @@ struct Serializable<std::bitset<N>>
 {
 	static inline auto constexpr width = sizeof(unsigned long long);
 
-	static bool read(Serializer& serializer, std::bitset<N>& b) {
+	static bool run(Read, Serializer& serializer, std::bitset<N>&& b) {
 		std::vector<uint64_t> parts;
 		for (size_t n = 0; n < N; n += width) {
 			uint64_t v;
@@ -300,7 +297,7 @@ struct Serializable<std::bitset<N>>
 		return true;
 	};
 
-	static bool write(Serializer& serializer, std::bitset<N> const& b_) {
+	static bool run(Write, Serializer& serializer, std::bitset<N>&& b_) {
 		auto b = b_;
 		std::bitset<N> ones = 0xFFFF'FFFF'FFFF'FFFFull;
 		for (size_t n = 0; n < N; n += width) {
@@ -316,7 +313,7 @@ template<class T, size_t Size>
 requires te::contains_v<simple_types, T>
 struct Serializable<std::array<T, Size>>
 {
-	static bool read(Serializer& serializer, std::array<T, Size>& vec) {
+	static bool run(Read, Serializer& serializer, std::array<T, Size>&& vec) {
 		size_t size;
 		READ(size);
 		assert(Size == size);
@@ -325,9 +322,9 @@ struct Serializable<std::array<T, Size>>
 		return true;
 	};
 
-	static bool write(Serializer& serializer, std::array<T, Size> const& vec) {
+	static bool run(Write, Serializer& serializer, std::array<T, Size>&& vec) {
 		WRITE(vec.size());
-		WRITEBYTES(reinterpret_cast<char const*>(vec.data()), vec.size() * sizeof(T));
+		WRITEBYTES(reinterpret_cast<char *>(vec.data()), vec.size() * sizeof(T));
 		return true;
 	};
 };
@@ -336,7 +333,7 @@ template<class T>
 requires te::contains_v<simple_types, T>
 struct Serializable<std::vector<T>>
 {
-	static bool read(Serializer& serializer, std::vector<T>& vec) {
+	static bool run(Read, Serializer& serializer, std::vector<T>&& vec) {
 		size_t size;
 		READ(size);
 		vec.resize(size);
@@ -344,9 +341,9 @@ struct Serializable<std::vector<T>>
 		return true;
 	};
 
-	static bool write(Serializer& serializer, std::vector<T> const& vec) {
+	static bool run(Write, Serializer& serializer, std::vector<T>&& vec) {
 		WRITE(vec.size());
-		WRITEBYTES(reinterpret_cast<char const*>(vec.data()), vec.size() * sizeof(T));
+		WRITEBYTES(reinterpret_cast<char *>(vec.data()), vec.size() * sizeof(T));
 		return true;
 	};
 };
@@ -354,7 +351,7 @@ struct Serializable<std::vector<T>>
 template<class T>
 struct Serializable<std::vector<T>>
 {
-	static bool read(Serializer& serializer, std::vector<T>& vec) {
+	static bool run(Read, Serializer& serializer, std::vector<T>&& vec) {
 		size_t size;
 		READ(size);
 		vec.resize(size);
@@ -364,9 +361,9 @@ struct Serializable<std::vector<T>>
 		return true;
 	};
 
-	static bool write(Serializer& serializer, std::vector<T> const& vec) {
+	static bool run(Write, Serializer& serializer, std::vector<T>&& vec) {
 		WRITE(vec.size());
-		for (auto const& v : vec) {
+		for (auto& v : vec) {
 			WRITE(v);
 		}
 		return true;
@@ -376,54 +373,36 @@ struct Serializable<std::vector<T>>
 template<class T>
 struct Serializable<std::unique_ptr<T>>
 {
-	static bool read(Serializer& serializer, std::unique_ptr<T>& ptr) {
+	static bool run(Read, Serializer& serializer, std::unique_ptr<T>&& ptr) {
 		ptr = std::make_unique<T>();
 		return serializer.read(*ptr);
 	};
 
-	static bool write(Serializer& serializer, std::unique_ptr<T> const& ptr) {
+	static bool run(Write, Serializer& serializer, std::unique_ptr<T>&& ptr) {
 		assert(ptr.get() != nullptr);
 		return serializer.write(*ptr);
 	};
 };
 
 template<class T>
-concept has_run = requires (T t, Serializer s) { Serializable<T>::template run<Read>(s, t); Serializable<T>::template run<Write>(s, t); };
-
-template<class T>
-inline bool Serializer::write(T const& val) {
-	if constexpr (is_wrapped<T>) {
-		//if constexpr (has_run<typename T::value_type>) {
-		//	return Serializable<typename T::value_type>::template run<Write, typename T::value_type const&>(*this, val.val);
-		//}
-		//else {
-		//	return Serializable<typename T::value_type>::write(*this, val.val);
-		//}
-		this->write(val.val);
-		return true;
+inline bool Serializer::write(T&& val) {
+	using W = std::remove_cvref_t<T>;
+	if constexpr (is_wrapped<W>) {
+		return this->write(val.val);
 	}
 	else {
-		if constexpr (has_run<T>) {
-			return Serializable<T>::template run<Write, T const&>(*this, val);
-		}
-		else {
-			return Serializable<T>::write(*this, val);
-		}
+		return Serializable<W>::run(Write{}, *this, std::forward<W>(val));
 	}
 }
 
 template<class T>
-inline bool Serializer::read(T& val) {
-	if constexpr (is_wrapped<T>) {
-		this->read(val.val);
-		return true;
+inline bool Serializer::read(T&& val) {
+	//Serializable<std::string>::run(Read{}, *this, "123");
+	using W = std::remove_cvref_t<T>;
+	if constexpr (is_wrapped<W>) {
+		return this->read(val.val);
 	}
 	else {
-		if constexpr (has_run<T>) {
-			return Serializable<T>::template run<Read, T&>(*this, val);
-		}
-		else {
-			return Serializable<T>::read(*this, val);
-		}
+		return Serializable<W>::run(Read{}, *this, std::forward<W>(val));
 	}
 }
