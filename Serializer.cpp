@@ -1,7 +1,12 @@
 #include "Serializer.h"
 
 std::string Serializer::getIndendation() const {
-	return std::string(this->indentationLevel, '\t');
+	if (this->spaces.has_value()) {
+		return std::string(this->indentationLevel * this->spaces.value(), ' ');
+	}
+	else {
+		return std::string(this->indentationLevel, '\t');
+	}
 }
 
 bool Serializer::writeBytes(char const* bytes, std::streamsize size) {
@@ -20,11 +25,6 @@ bool Serializer::printIndentedString(std::string const& str) {
 	*this->writeStream << '\n' << this->getIndendation() << str;
 	return true;
 }
-
-//bool Serializer::printString(std::string const& str) {
-//	*(this->writeStream) << str;
-//	return true;
-//}
 
 bool Serializer::printString(std::string_view sv) {
 	*(this->writeStream) << sv;

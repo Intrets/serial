@@ -33,7 +33,6 @@
 #define WRITE_DEF2(X, Y) static bool run(Write, Serializer& serializer, X,Y&& obj)
 #define ALL_DEF(X) template<class Selector> static bool run(Selector, Serializer& serializer, X&& obj)
 #define ALL(X) Wrapped{ obj.X, #X }
-//#define ALL(X) obj.X
 
 template<class T>
 struct Serializable;
@@ -68,6 +67,7 @@ struct Serializer
 	int32_t indentationLevel = 0;
 	int32_t repeatLevel = 3;
 	bool lastValueSimple = true;
+	std::optional<int> spaces = 4;
 
 	std::string getIndendation() const;
 
@@ -86,7 +86,6 @@ struct Serializer
 
 	bool printIndentedString(std::string const& str);
 
-	//bool printString(std::string const& str);
 	bool printString(std::string_view sv);
 
 	template<class T>
@@ -181,9 +180,33 @@ struct Serializable<std::optional<T>>
 using simple_types = te::list<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t, std::byte>;
 
 template<class T>
+constexpr auto name2 = "11";
+
+template<>
+constexpr auto name2<int8_t> = "int8";
+template<>
+constexpr auto name2<uint8_t> = "uint8";
+template<>
+constexpr auto name2<int16_t> = "int16";
+template<>
+constexpr auto name2<uint16_t> = "uint16";
+template<>
+constexpr auto name2<int32_t> = "int32";
+template<>
+constexpr auto name2<uint32_t> = "uint32";
+template<>
+constexpr auto name2<int64_t> = "int64";
+template<>
+constexpr auto name2<uint64_t> = "uint64";
+template<>
+constexpr auto name2<std::byte> = "std::byte";
+
+template<class T>
 requires te::contains_v<simple_types, T>
 struct Serializable<T>
 {
+	inline static const auto typeName = name2<T>;
+
 	READ_DEF(T) {
 		return serializer.readBytes(reinterpret_cast<char*>(&obj), sizeof(obj));
 	};
@@ -288,9 +311,11 @@ inline bool Serializer::writeAll(Args&&... args) {
 
 template<class... Args>
 inline bool Serializer::printAll(Args&&... args) {
+	this->printString("{");
 	this->indentationLevel++;
 	auto b = (this->print(args) && ...);
 	this->indentationLevel--;
+	this->printIndentedString("}");
 	return b;
 }
 
@@ -336,9 +361,42 @@ inline bool Serializer::readAll(Args&& ...args) {
 	return (this->read(args) && ...);
 }
 
+template<class T>
+static bool arrayPrint(Serializer& serializer, T&& obj) {
+	int32_t i = 0;
+	int32_t end = std::min(static_cast<int32_t>(obj.size()), serializer.repeatLevel);
+	if (end > 0) {
+		serializer.indentationLevel++;
+		serializer.printIndentedString("");
+
+		PRINT(obj[i]);
+		i++;
+		for (; i < end; i++) {
+			auto& v = obj[i];
+			if (serializer.lastValueSimple) {
+				serializer.printString(", ");
+			}
+			else {
+				serializer.printIndentedString(", ");
+			}
+			PRINT(v);
+		}
+
+		serializer.indentationLevel--;
+	}
+
+	if (serializer.repeatLevel < obj.size()) {
+		serializer.printString(std::format(" and {} more...", obj.size() - serializer.repeatLevel));
+	}
+	serializer.printIndentedString("}");
+	return true;
+}
+
 template<class T, size_t Size>
 struct Serializable<std::array<T, Size>>
 {
+	inline static const auto typeName = "array";
+
 	READ_DEF2(std::array<T, Size>) {
 		size_t size;
 		READ(size);
@@ -362,40 +420,7 @@ struct Serializable<std::array<T, Size>>
 
 	PRINT_DEF2(std::array<T, Size>) {
 		serializer.printString(std::format("array<{}, {}> {{ ", getName<T>(), Size));
-		int32_t i = 0;
-		int32_t end = std::min(static_cast<int32_t>(obj.size()), serializer.repeatLevel);
-		if (end > 0) {
-			PRINT(obj[i]);
-			i++;
-			for (; i < end; i++) {
-				auto& v = obj[i];
-				if (serializer.lastValueSimple) {
-					serializer.printString(", ");
-				}
-				else {
-					serializer.printIndentedString(", ");
-				}
-				PRINT(v);
-			}
-		}
-
-		if (serializer.repeatLevel < obj.size()) {
-			if (serializer.lastValueSimple) {
-				serializer.printString(std::format(" and {} more... }}", obj.size() - serializer.repeatLevel));
-			}
-			else {
-				serializer.printIndentedString(std::format("and {} more... }}", obj.size() - serializer.repeatLevel));
-			}
-		}
-		else {
-			if (serializer.lastValueSimple) {
-				serializer.printString(" }");
-			}
-			else {
-				serializer.printIndentedString("}");
-			}
-		}
-		return true;
+		return arrayPrint(serializer, obj);
 	}
 };
 
@@ -403,6 +428,7 @@ template<size_t N>
 struct Serializable<std::bitset<N>>
 {
 	static inline auto constexpr width = sizeof(unsigned long long);
+	inline static const auto typeName = std::format("bitset<{}>", N);
 
 	READ_DEF(std::bitset<N>) {
 		std::vector<uint64_t> parts;
@@ -446,6 +472,8 @@ struct Serializable<std::bitset<N>>
 template<class T>
 struct Serializable<std::vector<T>>
 {
+	inline static const auto typeName = "vector";
+
 	READ_DEF(std::vector<T>) {
 		size_t size;
 		READ(size);
@@ -466,41 +494,7 @@ struct Serializable<std::vector<T>>
 
 	PRINT_DEF(std::vector<T>) {
 		serializer.printString(std::format("vector<{}> {{ ", getName<T>()));
-		int32_t i = 0;
-		int32_t end = std::min(static_cast<int32_t>(obj.size()), serializer.repeatLevel);
-		if (end > 0) {
-			PRINT(obj[i]);
-			i++;
-			for (; i < end; i++) {
-				auto& v = obj[i];
-				if (serializer.lastValueSimple) {
-					serializer.printString(", ");
-				}
-				else {
-					serializer.printIndentedString(", ");
-				}
-				PRINT(v);
-			}
-		}
-
-		if (serializer.repeatLevel < obj.size()) {
-			if (serializer.lastValueSimple) {
-				serializer.printString(std::format(" and {} more... }}", obj.size() - serializer.repeatLevel));
-			}
-			else {
-				serializer.printIndentedString(std::format("and {} more... }}", obj.size() - serializer.repeatLevel));
-			}
-		}
-		else {
-			if (serializer.lastValueSimple) {
-				serializer.printString(" }");
-			}
-			else {
-				serializer.printIndentedString("}");
-			}
-
-		}
-		return true;
+		return arrayPrint(serializer, obj);
 	}
 };
 
@@ -549,7 +543,7 @@ template<class T>
 inline bool Serializer::print(T&& val) {
 	using W = std::remove_cvref_t<T>;
 	if constexpr (is_wrapped<W>) {
-		this->printString(std::format("\n{}{} ", this->getIndendation(), val.name));
+		this->printString(std::format("\n{}{} {} ", this->getIndendation(), val.name, getName<W::value_type>()));
 		auto b = this->print(val.val);
 		this->lastValueSimple = false;
 		return b;
