@@ -33,6 +33,7 @@
 #define WRITE_DEF2(X, Y) static bool run(Write, Serializer& serializer, X,Y&& obj)
 #define ALL_DEF(X) template<class Selector> static bool run(Selector, Serializer& serializer, X&& obj)
 #define ALL(X) Wrapped{ obj.X, #X }
+//#define ALL(X) obj.X
 
 template<class T>
 struct Serializable;
