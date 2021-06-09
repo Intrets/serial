@@ -33,6 +33,7 @@
 #define WRITE_DEF2(X, Y) static bool run(Write, Serializer& serializer, X,Y&& obj)
 #define ALL_DEF(X) template<class Selector> static bool run(Selector, Serializer& serializer, X&& obj)
 #define ALL(X) Wrapped{ obj.X, #X }
+//#define ALL(X) obj.X
 
 template<class T>
 struct Serializable;
@@ -66,6 +67,7 @@ struct Serializer
 
 	int32_t indentationLevel = 0;
 	int32_t repeatLevel = 3;
+	bool lastValueSimple = true;
 
 	std::string getIndendation() const;
 
@@ -288,7 +290,6 @@ template<class... Args>
 inline bool Serializer::printAll(Args&&... args) {
 	this->indentationLevel++;
 	auto b = (this->print(args) && ...);
-	this->printString("\n");
 	this->indentationLevel--;
 	return b;
 }
@@ -311,7 +312,11 @@ inline bool Serializer::runAll(Args&& ...args) {
 
 template<class T>
 inline bool Serializer::printSimpleValue(T&& val) {
-	if constexpr (std::integral<T>) {
+	this->lastValueSimple = true;
+	if constexpr (std::is_same_v<T, uint8_t>) {
+		*this->writeStream << static_cast<int>(val);
+	}
+	else if constexpr (std::integral<T>) {
 		*this->writeStream << val;
 	}
 	else if constexpr (std::is_same_v<T, std::byte>) {
@@ -356,7 +361,7 @@ struct Serializable<std::array<T, Size>>
 	}
 
 	PRINT_DEF2(std::array<T, Size>) {
-		serializer.printString(std::format("array<{}, {}> {{", getName<T>(), Size));
+		serializer.printString(std::format("array<{}, {}> {{ ", getName<T>(), Size));
 		int32_t i = 0;
 		int32_t end = std::min(static_cast<int32_t>(obj.size()), serializer.repeatLevel);
 		if (end > 0) {
@@ -364,15 +369,32 @@ struct Serializable<std::array<T, Size>>
 			i++;
 			for (; i < end; i++) {
 				auto& v = obj[i];
-				serializer.printString(", ");
+				if (serializer.lastValueSimple) {
+					serializer.printString(", ");
+				}
+				else {
+					serializer.printIndentedString(", ");
+				}
 				PRINT(v);
 			}
 		}
 
 		if (serializer.repeatLevel < obj.size()) {
-			serializer.printString(std::format(" and {} more...", obj.size() - serializer.repeatLevel));
+			if (serializer.lastValueSimple) {
+				serializer.printString(std::format(" and {} more... }}", obj.size() - serializer.repeatLevel));
+			}
+			else {
+				serializer.printIndentedString(std::format("and {} more... }}", obj.size() - serializer.repeatLevel));
+			}
 		}
-		serializer.printString("}");
+		else {
+			if (serializer.lastValueSimple) {
+				serializer.printString(" }");
+			}
+			else {
+				serializer.printIndentedString("}");
+			}
+		}
 		return true;
 	}
 };
@@ -443,7 +465,7 @@ struct Serializable<std::vector<T>>
 	}
 
 	PRINT_DEF(std::vector<T>) {
-		serializer.printString(std::format("vector<{}> {{", getName<T>()));
+		serializer.printString(std::format("vector<{}> {{ ", getName<T>()));
 		int32_t i = 0;
 		int32_t end = std::min(static_cast<int32_t>(obj.size()), serializer.repeatLevel);
 		if (end > 0) {
@@ -451,15 +473,33 @@ struct Serializable<std::vector<T>>
 			i++;
 			for (; i < end; i++) {
 				auto& v = obj[i];
-				serializer.printString(", ");
+				if (serializer.lastValueSimple) {
+					serializer.printString(", ");
+				}
+				else {
+					serializer.printIndentedString(", ");
+				}
 				PRINT(v);
 			}
 		}
 
 		if (serializer.repeatLevel < obj.size()) {
-			serializer.printString(std::format(" and {} more...", obj.size() - serializer.repeatLevel));
+			if (serializer.lastValueSimple) {
+				serializer.printString(std::format(" and {} more... }}", obj.size() - serializer.repeatLevel));
+			}
+			else {
+				serializer.printIndentedString(std::format("and {} more... }}", obj.size() - serializer.repeatLevel));
+			}
 		}
-		serializer.printString("}");
+		else {
+			if (serializer.lastValueSimple) {
+				serializer.printString(" }");
+			}
+			else {
+				serializer.printIndentedString("}");
+			}
+
+		}
 		return true;
 	}
 };
@@ -510,13 +550,15 @@ inline bool Serializer::print(T&& val) {
 	using W = std::remove_cvref_t<T>;
 	if constexpr (is_wrapped<W>) {
 		this->printString(std::format("\n{}{} ", this->getIndendation(), val.name));
-		return this->print(val.val);
+		auto b = this->print(val.val);
+		this->lastValueSimple = false;
+		return b;
 	}
 	else if constexpr (has_print<W>) {
 		return Serializable<W>::run(Print{}, *this, std::forward<W>(val));
 	}
 	else {
-		std::cout << "no print\n";
-		return true;
+		assert(0);
+		return false;
 	}
 }
