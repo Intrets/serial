@@ -14,7 +14,6 @@
 #include <utility>
 #include <iostream>
 #include <format>
-#include <algorithm>
 
 #include <tepp/tepp.h>
 
@@ -34,6 +33,7 @@
 #define ALL_DEF(X) template<class Selector> static bool run(Selector, Serializer& serializer, X&& obj)
 #define ALL(X) Wrapped{ obj.X, #X }
 //#define ALL(X) obj.X
+
 
 template<class T>
 struct Serializable;

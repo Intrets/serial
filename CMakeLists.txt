@@ -4,6 +4,7 @@ set(MODULE_NAME serial)
 
 set(MODULE_FILES
 	Serializer
+	ByteSwap
 )
 
 make_module(${MODULE_NAME} "${MODULE_FILES}")
