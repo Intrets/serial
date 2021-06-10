@@ -35,6 +35,7 @@
 
 namespace serial
 {
+	static_assert(std::endian::native == std::endian::big || std::endian::native == std::endian::little);
 	constexpr auto targetEndianness = std::endian::big;
 
 	template<class T>
@@ -183,32 +184,32 @@ namespace serial
 	using simple_types = te::list<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t, std::byte>;
 
 	template<class T>
-	constexpr char* name2;
+	constexpr char* simpleTypeName;
 
 	template<>
-	constexpr auto name2<int8_t> = "int8";
+	constexpr auto simpleTypeName<int8_t> = "int8";
 	template<>
-	constexpr auto name2<uint8_t> = "uint8";
+	constexpr auto simpleTypeName<uint8_t> = "uint8";
 	template<>
-	constexpr auto name2<int16_t> = "int16";
+	constexpr auto simpleTypeName<int16_t> = "int16";
 	template<>
-	constexpr auto name2<uint16_t> = "uint16";
+	constexpr auto simpleTypeName<uint16_t> = "uint16";
 	template<>
-	constexpr auto name2<int32_t> = "int32";
+	constexpr auto simpleTypeName<int32_t> = "int32";
 	template<>
-	constexpr auto name2<uint32_t> = "uint32";
+	constexpr auto simpleTypeName<uint32_t> = "uint32";
 	template<>
-	constexpr auto name2<int64_t> = "int64";
+	constexpr auto simpleTypeName<int64_t> = "int64";
 	template<>
-	constexpr auto name2<uint64_t> = "uint64";
+	constexpr auto simpleTypeName<uint64_t> = "uint64";
 	template<>
-	constexpr auto name2<std::byte> = "byte";
+	constexpr auto simpleTypeName<std::byte> = "byte";
 
 	template<class T>
 	requires te::contains_v<simple_types, T>
 		struct Serializable<T>
 	{
-		inline static const auto typeName = name2<T>;
+		inline static const auto typeName = simpleTypeName<T>;
 
 		READ_DEF(T) {
 			if constexpr (targetEndianness == std::endian::native) {

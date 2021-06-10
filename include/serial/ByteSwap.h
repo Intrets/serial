@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <cassert>
+#include <bit>
 
 template<class T>
 requires (sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8)
@@ -13,8 +14,8 @@ static T byteSwap(T val) {
 	else if constexpr (sizeof(T) == 2) {
 #ifdef WIN32
 		static_assert(sizeof(unsigned short) == 2);
-		auto w = _byteswap_ushort(*reinterpret_cast<unsigned short*>(&val));
-		return *reinterpret_cast<T*>(&w);
+		auto w = _byteswap_ushort(std::bit_cast<unsigned short>(val));
+		return std::bit_cast<T>(w);
 #else
 		char* r = reinterpret_cast<char*>(&val);
 		std::swap(r[1], r[0]);
@@ -24,8 +25,8 @@ static T byteSwap(T val) {
 	else if constexpr (sizeof(T) == 4) {
 #ifdef WIN32
 		static_assert(sizeof(unsigned long) == 4);
-		auto w = _byteswap_ulong(*reinterpret_cast<unsigned long*>(&val));
-		return *reinterpret_cast<T*>(&w);
+		auto w = _byteswap_ulong(std::bit_cast<unsigned long>(val));
+		return std::bit_cast<T>(w);
 #else
 		char* r = reinterpret_cast<char*>(&val);
 		std::swap(r[3], r[0]);
@@ -36,8 +37,8 @@ static T byteSwap(T val) {
 	else if constexpr (sizeof(T) == 8) {
 #ifdef WIN32
 		static_assert(sizeof(unsigned long long) == 8);
-		auto w = _byteswap_uint64(*reinterpret_cast<unsigned long long*>(&val));
-		return *reinterpret_cast<T*>(&w);
+		auto w = _byteswap_uint64(std::bit_cast<unsigned long long>(val));
+		return std::bit_cast<T>(w);
 #else
 		char* r = reinterpret_cast<char*>(&val);
 		std::swap(r[7], r[0]);
