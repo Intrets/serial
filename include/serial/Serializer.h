@@ -53,6 +53,9 @@ namespace serial
 		std::string_view name;
 	};
 
+	template<class T>
+	Wrapped(T& val, std::string_view name)->Wrapped<T>;
+
 
 	template<class T>
 	struct is_wrapped_ : std::false_type {};
@@ -184,32 +187,25 @@ namespace serial
 	using simple_types = te::list<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t, std::byte>;
 
 	template<class T>
-	constexpr char* simpleTypeName;
+	struct simpleTypeName;
 
-	template<>
-	constexpr auto simpleTypeName<int8_t> = "int8";
-	template<>
-	constexpr auto simpleTypeName<uint8_t> = "uint8";
-	template<>
-	constexpr auto simpleTypeName<int16_t> = "int16";
-	template<>
-	constexpr auto simpleTypeName<uint16_t> = "uint16";
-	template<>
-	constexpr auto simpleTypeName<int32_t> = "int32";
-	template<>
-	constexpr auto simpleTypeName<uint32_t> = "uint32";
-	template<>
-	constexpr auto simpleTypeName<int64_t> = "int64";
-	template<>
-	constexpr auto simpleTypeName<uint64_t> = "uint64";
-	template<>
-	constexpr auto simpleTypeName<std::byte> = "byte";
+#define SIMPLETYPENAME(X, Y) template<> struct simpleTypeName<X> { static inline constexpr std::string_view name = #Y; };
+
+	SIMPLETYPENAME(int8_t, int8)
+	SIMPLETYPENAME(uint8_t, uint8)
+	SIMPLETYPENAME(int16_t, int16)
+	SIMPLETYPENAME(uint16_t, uint16)
+	SIMPLETYPENAME(int32_t, int32)
+	SIMPLETYPENAME(uint32_t, uint32)
+	SIMPLETYPENAME(int64_t, int64)
+	SIMPLETYPENAME(uint64_t, uint64)
+	SIMPLETYPENAME(std::byte, byte)
 
 	template<class T>
 	requires te::contains_v<simple_types, T>
 		struct Serializable<T>
 	{
-		inline static const auto typeName = simpleTypeName<T>;
+		inline static const auto typeName = simpleTypeName<T>::name;
 
 		READ_DEF(T) {
 			if constexpr (targetEndianness == std::endian::native) {
@@ -587,7 +583,7 @@ namespace serial
 	inline bool Serializer::print(T&& val) {
 		using W = std::remove_cvref_t<T>;
 		if constexpr (is_wrapped<W>) {
-			this->printString(std::format("\n{}{} {} ", this->getIndendation(), val.name, getName<W::value_type>()));
+			this->printString(std::format("\n{}{} {} ", this->getIndendation(), val.name, getName<typename W::value_type>()));
 			auto b = this->print(val.val);
 			this->lastValueSimple = false;
 			return b;
