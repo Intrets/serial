@@ -265,6 +265,8 @@ namespace serial
 	template<>
 	struct Serializable<bool>
 	{
+		static constexpr std::string_view typeName = "bool";
+
 		READ_DEF(bool) {
 			int8_t v;
 			READ(v);
@@ -274,6 +276,15 @@ namespace serial
 
 		WRITE_DEF(bool) {
 			return serializer.write(static_cast<int8_t>(obj));
+		}
+
+		PRINT_DEF(bool) {
+			if (obj) {
+				return serializer.printString("true");
+			}
+			else {
+				return serializer.printString("false");
+			}
 		}
 	};
 
@@ -297,6 +308,8 @@ namespace serial
 	template<>
 	struct Serializable<glm::vec2>
 	{
+		inline static const std::string_view typeName = "vec2";
+
 		ALL_DEF(glm::vec2) {
 			return serializer.runAll<Selector>(
 				ALL(x),
@@ -308,6 +321,8 @@ namespace serial
 	template<>
 	struct Serializable<glm::ivec2>
 	{
+		static constexpr std::string_view typeName = "ivec2";
+
 		READ_DEF(glm::ivec2) {
 			int32_t x;
 			READ(x);
@@ -322,6 +337,13 @@ namespace serial
 			return
 				serializer.write(static_cast<int32_t>(obj.x)) &&
 				serializer.write(static_cast<int32_t>(obj.y));
+		}
+
+		PRINT_DEF(glm::ivec2) {
+			return serializer.printAll(
+				ALL(x),
+				ALL(y)
+			);
 		}
 	};
 
@@ -352,7 +374,8 @@ namespace serial
 			return this->printAll(std::forward<Args>(args)...);
 		}
 		else {
-			static_assert(0);
+			assert(0);
+			return false;
 		}
 	}
 
