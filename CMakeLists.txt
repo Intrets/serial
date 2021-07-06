@@ -4,7 +4,7 @@ include("./cmake/MakeModule.cmake")
 
 set(MODULE_NAME serial)
 
-project(${MODULE_NAME})
+project(${MODULE_NAME} LANGUAGES CXX)
 
 make_module(
 	MODULE_NAME ${MODULE_NAME}
