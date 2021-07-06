@@ -1,6 +1,5 @@
 #pragma once
 
-#include <wglm/glm.hpp>
 #include <vector>
 #include <ostream>
 #include <istream>
@@ -17,6 +16,8 @@
 #include <bit>
 
 #include <tepp/tepp.h>
+
+#include <wglm/glm.hpp>
 
 #include "ByteSwap.h"
 
@@ -301,6 +302,7 @@ namespace serial
 		}
 	};
 
+#ifdef LIB_WGLM
 	template<>
 	struct Serializable<glm::vec2>
 	{
@@ -313,7 +315,9 @@ namespace serial
 				);
 		}
 	};
+#endif
 
+#ifdef LIB_WGLM
 	template<>
 	struct Serializable<glm::ivec2>
 	{
@@ -342,6 +346,7 @@ namespace serial
 			);
 		}
 	};
+#endif
 
 	template<class... Args>
 	inline bool Serializer::writeAll(Args&&... args) {

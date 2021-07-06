@@ -13,7 +13,7 @@ make_module(
 		ByteSwap
 	CXX_STANDARD 20
 	REQUIRED_LIBS
-		WGLM
 		tepp
-		mem
+	OPTIONAL_LIBS
+		WGLM
 )
