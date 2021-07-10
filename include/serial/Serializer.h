@@ -204,7 +204,7 @@ namespace serial
 
 	template<class T>
 	requires te::contains_v<simple_types, T>
-		struct Serializable<T>
+	struct Serializable<T>
 	{
 		inline static const auto typeName = simpleTypeName<T>::name;
 
@@ -313,6 +313,40 @@ namespace serial
 				ALL(x),
 				ALL(y)
 				);
+		}
+	};
+#endif
+
+#ifdef LIB_WGLM
+	template<>
+	struct Serializable<glm::vec4>
+	{
+		inline static const std::string_view typeName = "vec4";
+
+		ALL_DEF(glm::vec4) {
+			return serializer.runAll<Selector>(
+				ALL(x),
+				ALL(y),
+				ALL(z),
+				ALL(w)
+				);
+		}
+	};
+#endif
+
+#ifdef LIB_WGLM
+	template<>
+	struct Serializable<glm::mat4>
+	{
+		inline static const std::string_view typeName = "mat4";
+
+		ALL_DEF(glm::mat4) {
+			return serializer.runAll<Selector>(
+				Wrapped{ obj[0], "0" },
+				Wrapped{ obj[1], "1" },
+				Wrapped{ obj[2], "2" },
+				Wrapped{ obj[3], "3" }
+			);
 		}
 	};
 #endif
