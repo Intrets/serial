@@ -18,6 +18,7 @@
 #include <tepp/tepp.h>
 
 #include <wglm/glm.hpp>
+#include <wglm/gtx/quaternion.hpp>
 
 #include "ByteSwap.h"
 
@@ -319,11 +320,44 @@ namespace serial
 
 #ifdef LIB_WGLM
 	template<>
+	struct Serializable<glm::vec3>
+	{
+		inline static const std::string_view typeName = "vec3";
+
+		ALL_DEF(glm::vec3) {
+			return serializer.runAll<Selector>(
+				ALL(x),
+				ALL(y),
+				ALL(z)
+				);
+		}
+	};
+#endif
+
+#ifdef LIB_WGLM
+	template<>
 	struct Serializable<glm::vec4>
 	{
 		inline static const std::string_view typeName = "vec4";
 
 		ALL_DEF(glm::vec4) {
+			return serializer.runAll<Selector>(
+				ALL(x),
+				ALL(y),
+				ALL(z),
+				ALL(w)
+				);
+		}
+	};
+#endif
+
+#ifdef LIB_WGLM
+	template<>
+	struct Serializable<glm::quat>
+	{
+		inline static const std::string_view typeName = "quat";
+
+		ALL_DEF(glm::quat) {
 			return serializer.runAll<Selector>(
 				ALL(x),
 				ALL(y),
